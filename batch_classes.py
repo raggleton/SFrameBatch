@@ -77,7 +77,7 @@ def submit_qsub(NFiles,Stream,name,workdir):
         print Stream+' has been created'
  
     #call(['qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'], shell=True)
-    proc_qstat = Popen(['qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
+    proc_qstat = Popen(['qsub -N '+ name+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
     return (proc_qstat.communicate()[0].split()[2]).split('.')[0]
 
 
