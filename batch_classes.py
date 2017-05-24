@@ -19,6 +19,7 @@ def write_script(name,workdir,header):
 ##Use home server with scientific linux 6 
 #$ -l os=sld6 
 #$ -l site=hh 
+#$ -P unihh2
 #$ -cwd
 ##You need to set up sframe
 #$ -V 
@@ -48,6 +49,7 @@ def resub_script(name,workdir,header):
 ##Use home server with scientific linux 6 
 #$ -l os=sld6 
 #$ -l site=hh 
+#$ -P unihh2
 #$ -cwd
 ##You need to set up sframe
 #$ -V 
