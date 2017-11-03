@@ -4,9 +4,7 @@ Class names should correspond to their XML tags.
 """
 
 
-def dict_to_str(dict):
-    """Output a dict as a string, with formatting niceties"""
-    return str(dict).rstrip("}").lstrip("{")
+from utils import dict_to_str
 
 
 class JobConfiguration(object):
@@ -46,8 +44,6 @@ class Cycle(object):
         self.TreeCacheSize = TreeCacheSize
         self.TreeCacheLearnEntries = TreeCacheLearnEntries
         self.ProcessOnlyLocal = ProcessOnlyLocal
-        self.input_datas = input_datas
-        self.user_config = user_config
         self.input_datas = input_datas or []
         self.user_config = user_config
 
@@ -62,11 +58,12 @@ class Cycle(object):
 class InputData(object):
     """Hold info about an input dataset"""
 
-    def __init__(self, Type, Version, Lumi=0, NEventsMax=-1, Cacheable=False, SkipValid=False, input_tree=None, output_tree=None, input_obj=None):
+    def __init__(self, Type, Version, Lumi=0, NEventsMax=-1, NEventsSkip=0, Cacheable=False, SkipValid=False, input_tree=None, output_tree=None, input_obj=None):
         self.Type = Type
         self.Version = Version
         self.Lumi = Lumi
         self.NEventsMax = NEventsMax
+        self.NEventsSkip = NEventsSkip
         self.Cacheable = Cacheable
         self.SkipValid = SkipValid
         self.input_tree = input_tree
@@ -122,7 +119,7 @@ class OutputTree(object):
 
 class UserConfig(object):
     """Settings for the Cycle, not including input files. Holds a collection of Items."""
-    
+
     def __init__(self, items=None):
         self.items = items or []
 
@@ -135,7 +132,7 @@ class UserConfig(object):
 
 class Item(object):
     """Hold info about an <Item>. Many Items make up a UserConfig."""
-    
+
     def __init__(self, Name, Value):
         self.Name = Name
         self.Value = Value

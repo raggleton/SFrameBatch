@@ -4,6 +4,8 @@ import ROOT
 import sys
 from glob import glob
 
+ROOT.PyConfig.IgnoreCommandLineOptions = True
+
 def check_TreeExists(filename,treename):
      rootfile = ROOT.TFile.Open(filename)
      #print filename

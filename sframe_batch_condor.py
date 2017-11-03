@@ -13,26 +13,17 @@ import xml.etree.ElementTree as ET
 import timeit
 import subprocess
 import shutil
-from itertools import izip_longest
+from copy import deepcopy
+from pprint import pformat
 
 import job_conf_classes as jcc
+from local_manager import Manager
 
 
-fmt = '%(module)s.%(funcName)s():%(lineno)d >> %(message)s'
+fmt = '%(module)s.%(funcName)s:%(lineno)d >> %(message)s'
 logging.basicConfig(level=logging.INFO, format=fmt)
+# logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-
-
-def grouper(iterable, n, fillvalue=None):
-    """Collect data into fixed-length chunks or blocks
-    Stolen from: https://docs.python.org/2/library/itertools.html#recipes
-
-    e.g.
-    >>> grouper('ABCDEFG', 3, 'x')
-    ['ABC', 'DEF', 'Gxx']
-    """
-    args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
 
 
 class BatchParser(ArgumentParser):
@@ -40,9 +31,9 @@ class BatchParser(ArgumentParser):
 
     def __init__(self, *args, **kwargs):
         super(BatchParser, self).__init__(*args, **kwargs)
-        self.add_argument("filename", 
+        self.add_argument("filename",
                           help="XML config to submit")
-        self.add_argument("-w", "--workdir", default=None, 
+        self.add_argument("-w", "--workdir", default=None,
                           help="Specify directory to store auxiliary files. Overrides whatever is set in <ConfigSGE>")
         self.add_argument("-v", "--verbose", action='store_true',
                           help="Display more messages")
@@ -149,13 +140,22 @@ def update_args(args, parser_settings, batch_settings):
     Parameters
     ----------
     args : argparse.Namespace
-    parser_settings, batch_settings : dict
+        User args from CL
+    parser_settings : dict
+        Setting from XML
+    batch_settings : dict
+        Batch setting from XML
     """
-    if args.workdir == None:
-        args.workdir = sanitise_path(batch_settings['Workdir'])
+    # Make sure to use the command line workdir over the file one
+    # and account for the lower vs upper case difference
+    if args.workdir is not None:
+        batch_settings['workdir'] = args.workdir
     else:
-        args.workdir = sanitise_path(args.workdir)
-        log.info("Ignoring Workdir attribute in XML file, using %s instead", args.workdir)
+        batch_settings['workdir'] = batch_settings['Workdir']
+
+    args.__dict__.update(parser_settings)
+    args.__dict__.update(batch_settings)
+    args.workdir = sanitise_path(args.workdir)
 
 
 def create_batch_workdir(workdir):
@@ -179,7 +179,7 @@ def store_tree(tree):
     ------
     job_conf_classes.JobConfiguration
 
-    """    
+    """
     jc = jcc.JobConfiguration(library="", package="", **tree.attrib)
 
     # iterate over each Cycle element, store info into objects
@@ -195,12 +195,12 @@ def store_tree(tree):
                 this_id.input_obj.append(jcc.In(**in_ele.attrib))
 
             in_tree_ele = id_ele.find('InputTree')
-            if in_tree_ele is not None: 
-                this_id.InputTree = jcc.InputTree(**in_tree_ele.attrib)            
+            if in_tree_ele is not None:
+                this_id.input_tree = jcc.InputTree(**in_tree_ele.attrib)
 
             out_tree_ele = id_ele.find('OutputTree')
-            if out_tree_ele is not None: 
-                this_id.OutputTree = jcc.OutputTree(**out_tree_ele.attrib)            
+            if out_tree_ele is not None:
+                this_id.output_tree = jcc.OutputTree(**out_tree_ele.attrib)
 
             cycle.input_datas.append(this_id)
 
@@ -213,6 +213,45 @@ def store_tree(tree):
         jc.cycles.append(cycle)
 
     return jc
+
+
+def process_cycle(cycle, args, template_root):
+    """Handle a Cycle: setup all the jobs and files needed for submission
+
+    Parameters
+    ----------
+    cycle : job_conf_classes.Cycle
+        Overall Cycle element
+    args : ArgumentParser.Namespace
+        User args about job configuration etc
+    template_root : ElementTree.Element
+        Template JobConfiguration Element to give to jobs to create XML files
+    """
+    manager = Manager(cycle)
+    manager.setup_jobs(args=args)
+    manager.write_batch_files(template_root)
+
+
+def create_template_root(tree):
+    """Create a template JobConfiguration Element for jobs to customise
+
+    Parameters
+    ----------
+    tree : ElementTree.Element
+        Original JobConfiguration element to use as a template
+
+    Returns
+    -------
+    ElementTree.Element
+        New template with no InputData elements
+    """
+    new_tree = deepcopy(tree)
+    cycle = new_tree.find("Cycle")
+    if cycle is None:
+        raise RuntimeError("Cannot find JobCycle element")
+    for id_ele in cycle.findall("InputData"):
+        cycle.remove(id_ele)
+    return new_tree
 
 
 def main(in_args):
@@ -228,13 +267,14 @@ def main(in_args):
     log.info("Processing %s" % args.filename)
 
     xml_str = get_expanded_xml(args.filename)
-    
+
     parser_settings, batch_settings = get_batch_settings(xml_str)
-    
+
     log.debug('parser_settings: %s', parser_settings)
     log.debug('batch_settings: %s', batch_settings)
 
     update_args(args, parser_settings, batch_settings)
+    log.debug(args)
 
     tree = ET.fromstring(xml_str)
     # log.debug(ET.tostring(tree))
@@ -244,12 +284,15 @@ def main(in_args):
     job_config = store_tree(tree)
     log.debug(job_config)
 
-    # create XML files for each job, and all necessary folders
+    template_root = create_template_root(tree)
+    log.debug(ET.tostring(template_root))
 
-    # create condor job file per job? or altogether?
+    for cycle in job_config.cycles:
+        # Setup jobs & write all necessary files
+        process_cycle(cycle, args, template_root)
 
-    # submit jobs, and keep some record of jobs, IDs, output file locations, status
-    
+        # submit jobs, and keep some record of jobs, IDs, output file locations, status
+
     return 0
 
 
