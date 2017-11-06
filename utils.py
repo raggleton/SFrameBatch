@@ -1,4 +1,5 @@
 from itertools import izip_longest
+import os
 
 
 def dict_to_str(dict):
@@ -24,4 +25,12 @@ class BasicObj(object):
 
     def __str__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
+
+
+def sanitise_path(filepath):
+    """Resolve symlinks, and form absolute path.
+
+    I can never remember which bit of os.path to use.
+    """
+    return os.path.realpath(filepath)
 
