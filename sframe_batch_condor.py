@@ -8,7 +8,6 @@ import os
 import sys
 from argparse import ArgumentParser
 import logging
-# from lxml import etree as ET
 import xml.etree.ElementTree as ET
 import timeit
 import subprocess
@@ -18,6 +17,7 @@ from pprint import pformat
 
 import job_conf_classes as jcc
 from local_manager import Manager
+from utils import sanitise_path
 
 
 fmt = '%(module)s.%(funcName)s:%(lineno)d >> %(message)s'
@@ -37,14 +37,6 @@ class BatchParser(ArgumentParser):
                           help="Specify directory to store auxiliary files. Overrides whatever is set in <ConfigSGE>")
         self.add_argument("-v", "--verbose", action='store_true',
                           help="Display more messages")
-
-
-def sanitise_path(filepath):
-    """Resolve symlinks, and form absolute path.
-
-    I can never remember which bit of os.path to use.
-    """
-    return os.path.realpath(filepath)
 
 
 def get_expanded_xml(filename):
@@ -155,17 +147,18 @@ def update_args(args, parser_settings, batch_settings):
 
     args.__dict__.update(parser_settings)
     args.__dict__.update(batch_settings)
-    args.workdir = sanitise_path(args.workdir)
 
 
 def create_batch_workdir(workdir):
     """Create a workdir for batch/job files"""
+
+    # FIXME: should this be here?
+
     if os.path.isdir(workdir):
         log.warning("%s already exists - you probably want to clean it out first", workdir)
     else:
         log.debug("Creating workdir %s", workdir)
         os.makedirs(workdir)
-        shutil.copy('JobConfig.dtd', workdir)
 
 
 def store_tree(tree):
@@ -230,6 +223,7 @@ def process_cycle(cycle, args, template_root):
     manager = Manager(cycle)
     manager.setup_jobs(args=args)
     manager.write_batch_files(template_root)
+    return manager
 
 
 def create_template_root(tree):
@@ -277,21 +271,16 @@ def main(in_args):
     log.debug(args)
 
     tree = ET.fromstring(xml_str)
-    # log.debug(ET.tostring(tree))
 
     create_batch_workdir(args.workdir)
 
     job_config = store_tree(tree)
-    log.debug(job_config)
 
     template_root = create_template_root(tree)
-    log.debug(ET.tostring(template_root))
 
     for cycle in job_config.cycles:
-        # Setup jobs & write all necessary files
-        process_cycle(cycle, args, template_root)
-
-        # submit jobs, and keep some record of jobs, IDs, output file locations, status
+        manager = process_cycle(cycle, args, template_root)
+        manager.submit_jobs()
 
     return 0
 
