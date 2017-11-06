@@ -468,12 +468,15 @@ class Manager(object):
             splitting_value = int(args.FileSplit)
             log.info('Splitting into jobs: %d files / job', splitting_value)
 
+        total_jobs = 0
         for dataset in self.input_datasets:
             dataset.setup_jobs_dirs(self.job_cycle.OutputDirectory, args.workdir)
             dataset.group_files_into_jobs(splitting_mechanism, splitting_value)
 
+            total_jobs += len(dataset.jobs)
             log.info('%s => %d jobs', dataset.name, len(dataset.jobs))
 
+        log.info("TOTAL: %d jobs", total_jobs)
         log.debug(self.input_datasets)
 
     def write_batch_files(self, template_root):
