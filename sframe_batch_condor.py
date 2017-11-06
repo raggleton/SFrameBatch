@@ -34,7 +34,10 @@ class BatchParser(ArgumentParser):
         self.add_argument("filename",
                           help="XML config to submit")
         self.add_argument("-w", "--workdir", default=None,
-                          help="Specify directory to store auxiliary files. Overrides whatever is set in <ConfigSGE>")
+                          help="Specify directory to store auxiliary files. "
+                               "Overrides whatever is set in <ConfigSGE>")
+        self.add_argument("--dry", action='store_true',
+                          help="Dry run: create all files, but do not submit jobs")
         self.add_argument("-v", "--verbose", action='store_true',
                           help="Display more messages")
 
@@ -280,7 +283,11 @@ def main(in_args):
 
     for cycle in job_config.cycles:
         manager = process_cycle(cycle, args, template_root)
-        manager.submit_jobs()
+        if not args.dry:
+            manager.submit_jobs()
+        else:
+            for dataset in manager.datasets:
+                log.info('condor_submit %s', dataset.job_file)
 
     return 0
 
