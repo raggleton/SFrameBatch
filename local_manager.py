@@ -240,22 +240,16 @@ class Dataset(object):
     def __str__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
 
-    def setup_jobs(self, output_dir, workdir, splitting_mechanism="nfiles", splitting_value=1):
-        """Turn the list of input files into a set of Jobs based on some splitting mechanism.
+    def setup_jobs_dirs(self, output_dir, workdir):
+        """Create dirs for job outputs/condor files, and add in DTDs
 
         Parameters
         ----------
         output_dir : str
             Output directory for final ROOT file
         workdir : str
-            Name of workdir to hold pre-hadded files
-
-        Raises
-        ------
-        RuntimeError
-            If splitting option not valid
+            Workdir name
         """
-
         # Setup all the dirs needed for this dataset & its jobs
         self.job_outdir = os.path.join(output_dir, workdir)
         self.job_batchdir = os.path.join(workdir, self.name)
@@ -284,7 +278,22 @@ class Dataset(object):
             original_dtd = os.path.join(os.path.dirname(__file__), dtd)
             os.symlink(original_dtd, this_dtd)
 
-        # Split up files/events into Jobs by some mechanism
+    def group_files_into_jobs(self, splitting_mechanism="nfiles", splitting_value=1):
+        """Turn the list of input files into a set of Jobs based on some splitting mechanism.
+
+        Parameters
+        ----------
+        splitting_mechanism : str, optional
+            Method for dividing up files into jobs
+        splitting_value : int, optional
+            Value for splitting
+
+        Raises
+        ------
+        RuntimeError
+            If splitting option not valid
+        """
+
         if splitting_mechanism not in ['nfiles', 'nevents']:
             raise RuntimeError("%s is not a valid splitting option" % splitting_mechanism)
 
@@ -460,9 +469,11 @@ class Manager(object):
             log.info('Splitting into jobs: %d files / job', splitting_value)
 
         for dataset in self.input_datasets:
-            dataset.setup_jobs(self.job_cycle.OutputDirectory, args.workdir,
-                               splitting_mechanism, splitting_value)
+            dataset.setup_jobs_dirs(self.job_cycle.OutputDirectory, args.workdir)
+            dataset.group_files_into_jobs(splitting_mechanism, splitting_value)
+
             log.info('%s => %d jobs', dataset.name, len(dataset.jobs))
+
         log.debug(self.input_datasets)
 
     def write_batch_files(self, template_root):
