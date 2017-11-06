@@ -317,8 +317,7 @@ class Dataset(object):
         template = """Executable = {EXE}
 Universe = vanilla
 
-xmlname = $BASENAME(filename)
-rootname = $SUBSTR(xmlname, 0, -4)
+rootname = $Fn(filename)
 
 Output = {OUTFILE}
 Error = {ERRFILE}
