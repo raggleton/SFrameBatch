@@ -446,18 +446,18 @@ class Manager(object):
         splitting_value = 0
 
         if int(args.NEventsBreak) != 0:
-            log.info('Splitting into jobs by number of events')
             splitting_mechanism = "nevents"
             splitting_value = int(args.NEventsBreak)
+            log.info('Splitting into jobs: %d events / job', splitting_value)
             # FIXME how to handle 'LastBreak' ?
             log.warning('Ignoring LastBreak attribute as not implemented')
 
         if int(args.FileSplit) != 0:
             if splitting_mechanism != "":
                 raise RuntimeError("You cannot specify both NEventsBreak and FileSplit in <ConfigParse>.")
-            log.info('Splitting into jobs by number of files')
             splitting_mechanism = "nfiles"
             splitting_value = int(args.FileSplit)
+            log.info('Splitting into jobs: %d files / job', splitting_value)
 
         for dataset in self.input_datasets:
             dataset.setup_jobs(self.job_cycle.OutputDirectory, args.workdir,
