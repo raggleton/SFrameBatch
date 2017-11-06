@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+echo "Running on:" $(hostname -f)
+
 # Template script to run sframe_main on worker node
 # Required to setup correct paths etc as LD_LIBRARY_PATH not exposed
 # Args: XML filename
