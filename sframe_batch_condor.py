@@ -269,7 +269,8 @@ def main(in_args):
         args.submit = True
     else:
         if args.submit:
-            log.warning("%s already exists! No jobs submitted - doing job monitoring instead")
+            log.warning("%s already exists! No jobs submitted - doing job monitoring instead", args.workdir)
+            args.submit = False
 
     if args.submit:
         # Create and submit jobs
