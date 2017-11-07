@@ -7,6 +7,7 @@ import logging
 from copy import deepcopy
 import xml.etree.ElementTree as ET
 import subprocess
+from glob import glob
 
 from utils import sanitise_path
 
@@ -80,23 +81,35 @@ class Job(object):
         Name of input files
     job_index : int
         Index of Job within its Dataset, not a global index
+    log_filename : str
+        HTCondor log filename
     nevents_max : int
         Number of events to process
     nevents_skip : int
         Number of events to skip processing
     output_file : str
         Name of output ROOT file
+    stderr_filename : str
+        File for STDERR
+    stdout_filename : str
+        File for STDOUT
     xml_filename : str
         Name of XML file for SFrame
     """
 
-    def __init__(self, job_index, input_files=None, output_file=None, nevents_max=-1, nevents_skip=0, xml_filename=""):
+    def __init__(self, job_index, input_files=None, output_file=None, nevents_max=-1, nevents_skip=0,
+                 xml_filename="", stdout_filename="", stderr_filename="", log_filename=""):
         self.job_index = job_index
         self.input_files = input_files or []
         self.output_file = output_file
         self.nevents_max = nevents_max
         self.nevents_skip = nevents_skip
         self.xml_filename = xml_filename
+        self.stdout_filename = stdout_filename
+        self.stderr_filename = stderr_filename
+        self.log_filename = log_filename
+        # self.cluser = int(cluster)
+        # self.process = int(process)
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -211,8 +224,16 @@ class Dataset(object):
         Output directory for per-Job ROOT files
     jobs : list
         Collection of Jobs for this Dataset
+    log_stem : str
+        Template filename for HTCondor log files
     name : str
         Name of this dataset (i.e. Version)
+    stderr_stem : str
+        Template filename for STDOUT files
+    stdout_stem : str
+        Template filename for STDERR files
+    type : str
+        Type attribute from InputData tag
 
     """
 
@@ -302,11 +323,16 @@ class Dataset(object):
                 ind_str = "_%d" % ind
                 out_filename = os.path.join(self.job_outdir, generate_sframe_filename(self.type, self.name + ind_str))
                 xml_filename = os.path.join(self.job_batchdir_xml, self.name + "_%d.xml" % ind)
+                # placeholder filename for STDOUT/ERR/log - will be replaced after jobs actually submitted, but makes life easier
+                stem = os.path.join(self.job_batchdir, self.name)
                 job = Job(job_index=ind,
                           input_files=[f for f in file_group if f],
                           output_file=out_filename,
                           xml_filename=xml_filename,
-                          nevents_max=-1)
+                          nevents_max=-1,
+                          stdout_filename=stem+".out",
+                          stderr_filename=stem+".err",
+                          log_filename=stem+".log")
                 log.debug(job)
                 self.jobs.append(job)
         elif splitting_mechanism is "nevents":
@@ -339,6 +365,10 @@ queue filename from {LISTFILE}
 """
 
         exe_script = os.path.join(os.path.dirname(__file__), "worker_run.sh")
+
+        self.stdout_stem = "$(rootname).$(cluster).$(process).out"
+        self.stderr_stem = "$(rootname).$(cluster).$(process).err"
+        self.log_stem = "$(rootname).$(cluster).$(process).log"
 
         job_args = {
             "EXE": exe_script,
@@ -407,6 +437,27 @@ queue filename from {LISTFILE}
         cmd = "condor_submit " + self.job_file
         log.debug(cmd)
         subprocess.check_call(cmd, shell=True)
+
+    def find_job_logs(self):
+        """Find the log file for each Job in the Dataset
+
+        If more than 1 match, use the newest.
+        """
+        for job in self.jobs:
+            num_glob = "[0-9]*"
+            pattern = self.log_stem.replace("$(cluster)", num_glob).replace("$(process)", num_glob)
+            xml_stem = os.path.splitext(os.path.basename(job.xml_filename))[0]
+            pattern = pattern.replace("$(rootname)", xml_stem)
+            filename = os.path.join(self.job_batchdir_log, pattern)
+            matches = glob(filename)
+            if len(matches) == 0:
+                log.warning("Cannot find log file matching %s", filename)
+                job.log_filename = ""
+            elif len(matches) > 1:
+                log.warning("Found more than 1 log file matching %s, using the newest created one", filename)
+                job.log_filename = max(matches, key=os.path.getctime)
+            else:
+                job.log_filename = matches[0]
 
 
 class Manager(object):
@@ -498,8 +549,9 @@ class Manager(object):
             dataset.write_xml_files(template_root)
 
     def submit_jobs(self):
-        """Submit all jobs across all Datasets."""
+        """Submit all jobs across all Datasets, and store new log files."""
         log.info('Submitting jobs')
         for dataset in self.input_datasets:
             log.info(dataset.name)
             dataset.submit_jobs()
+            dataset.find_job_logs()
