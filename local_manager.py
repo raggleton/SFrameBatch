@@ -301,6 +301,7 @@ class Dataset(object):
                                  nevents=get_num_events(input_file.FileName, tree_name),
                                  lumi=0)
                             for input_file in input_data.input_obj]
+        self.input_data = input_data
 
     def setup_jobs_dirs(self, output_dir, workdir):
         """Create dirs for job outputs/condor files, and add in DTDs
