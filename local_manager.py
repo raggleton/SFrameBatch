@@ -522,14 +522,14 @@ queue filename from {LISTFILE}
             job.update_stdout_stderr_filenames(new_stdout, new_stderr)
 
     def construct_status_dict(self):
-        """Construct dict for this Dataset
+        """Construct dict represenation for this Dataset
 
         Returns
         -------
         dict
             Description
         """
-        status_dict = {}
+        status_dict = OrderedDict()
         # Only keep fields that aren't "deep" or unserializable
         iterables = [list, tuple, job_conf_classes.InputData]
         for k, v in self.__dict__.iteritems():
