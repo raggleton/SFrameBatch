@@ -488,10 +488,10 @@ queue filename from {LISTFILE}
             pattern = pattern.replace("$(rootname)", xml_stem)
             matches = glob(pattern)
             if len(matches) == 0:
-                log.warning("Cannot find log file matching %s", filename)
+                log.warning("Cannot find log file matching %s", pattern)
                 job.log_filename = ""
             elif len(matches) > 1:
-                log.warning("Found more than 1 log file matching %s, using the newest created one", filename)
+                log.warning("Found more than 1 log file matching %s, using the newest created one", pattern)
                 job.log_filename = max(matches, key=os.path.getctime)
             else:
                 job.log_filename = matches[0]
