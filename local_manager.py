@@ -710,7 +710,7 @@ class Manager(object):
         self.datasets.append(dataset)
 
     def update_dataset_statuses(self):
-        """Summary
+        """Update the status of all Jobs in all Datasets using htcondor scheduler
         """
         schedd = htcondor.Schedd()
         for dataset in self.datasets:
@@ -719,8 +719,10 @@ class Manager(object):
 
 
     def display_progress(self):
-        """Summary
+        """Display summary info about all Datasets
         """
+        longest_dataset_name = max(len(d.name) for d in self.datasets)
+        dname_width = longest_dataset_name+1
 
         for dataset in self.datasets:
             n_idle = dataset.get_num_jobs_with_status(1)
@@ -729,6 +731,8 @@ class Manager(object):
             n_held = dataset.get_num_jobs_with_status(5)
             n_total = len(dataset.jobs)
             if n_done != n_total:
-                log.info("%s => %d running, %d/%d done", dataset.name, n_running, n_done, n_total)
+                template = "{name:.<%d}: {running} running, {done}/{total} done" % (dname_width)
+                log.info(template.format(name=dataset.name, running=n_running, done=n_done, total=n_total))
             else:
-                log.info("%s => All done :)", dataset.name)
+                template = "{name:.<%d}: all done :)" % (dname_width)
+                log.info(template.format(name=dataset.name))
