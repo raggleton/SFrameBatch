@@ -552,13 +552,13 @@ class Manager(object):
     ----------
     job_cycle : Cycle
         Master Cycle element, holding info about the datasets
-    input_datasets : list
+    datasets : list
         Hold list of all Dataset objects for this XML file
     """
 
     def __init__(self, job_cycle=None):
         self.job_cycle = job_cycle
-        self.input_datasets = []
+        self.datasets = []
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -568,7 +568,7 @@ class Manager(object):
 
     @property
     def jobs(self):
-        for dataset in self.input_datasets:
+        for dataset in self.datasets:
             for job in dataset.jobs:
                 yield job
 
@@ -577,7 +577,7 @@ class Manager(object):
         for input_data in self.job_cycle.input_datas:
             dataset = Dataset()
             dataset.setup_from_input_data(input_data)
-            self.input_datasets.append(dataset)
+            self.datasets.append(dataset)
 
     def setup_jobs(self, args):
         """Make Datasets divide up files into Jobs, and create necessary dirs
@@ -606,7 +606,7 @@ class Manager(object):
             log.info('Splitting into jobs: %d files / job', splitting_value)
 
         total_jobs = 0
-        for dataset in self.input_datasets:
+        for dataset in self.datasets:
             dataset.setup_jobs_dirs(self.job_cycle.OutputDirectory, args.workdir)
             dataset.group_files_into_jobs(splitting_mechanism, splitting_value)
 
@@ -614,7 +614,7 @@ class Manager(object):
             log.info('%s => %d jobs', dataset.name, len(dataset.jobs))
 
         log.info("TOTAL: %d jobs", total_jobs)
-        log.debug(self.input_datasets)
+        log.debug(self.datasets)
 
     def write_batch_files(self, template_root):
         """Make all Datasets write all files necessary for batch jobs.
@@ -628,14 +628,14 @@ class Manager(object):
             JobConfiguration element, used as a template for XML files
 
         """
-        for dataset in self.input_datasets:
+        for dataset in self.datasets:
             dataset.write_condor_files()
             dataset.write_xml_files(template_root)
 
     def submit_jobs(self):
         """Submit all jobs across all Datasets, and store log files and status JSON."""
         log.info('Submitting jobs')
-        for dataset in self.input_datasets:
+        for dataset in self.datasets:
             log.info(dataset.name)
             dataset.submit_jobs()
             dataset.find_job_logs()
@@ -660,4 +660,4 @@ class Manager(object):
         # Do jobs manually
         dataset.jobs = [Job(**jdict) for jdict in sdict['jobs']]
         log.debug(dataset)
-        self.input_datasets.append(dataset)
+        self.datasets.append(dataset)
