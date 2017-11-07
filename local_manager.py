@@ -330,7 +330,9 @@ getenv = True
 
 InitialDir = $ENV(PWD)
 
-request_memory = 3GB
+JobBatchName = {JOBNAME}
+
+request_memory = 1GB
 
 arguments = $(filename)
 queue filename from {LISTFILE}
@@ -340,10 +342,11 @@ queue filename from {LISTFILE}
 
         job_args = {
             "EXE": exe_script,
-            "OUTFILE": os.path.join(self.job_batchdir_out, "$(rootname).$(cluster).$(process).out"),
-            "ERRFILE": os.path.join(self.job_batchdir_err, "$(rootname).$(cluster).$(process).err"),
-            "LOGFILE": os.path.join(self.job_batchdir_log, "$(rootname).$(cluster).$(process).log"),
-            "LISTFILE": os.path.join(self.job_batchdir, "xml_list.txt")
+            "OUTFILE": os.path.join(self.job_batchdir_out, self.stdout_stem),
+            "ERRFILE": os.path.join(self.job_batchdir_err, self.stderr_stem),
+            "LOGFILE": os.path.join(self.job_batchdir_log, self.log_stem),
+            "LISTFILE": os.path.join(self.job_batchdir, "xml_list.txt"),
+            "JOBNAME": "%s_%s" % (os.path.basename(self.job_outdir), self.name)
         }
         file_contents = template.format(**job_args)
 
