@@ -291,7 +291,7 @@ def main(in_args):
                 for dataset in manager.datasets:
                     log.info('condor_submit %s', dataset.job_file)
     else:
-        log.info("Jobs submitted - processing status")
+        log.info("Jobs submitted - processing status for workdir %s", args.workdir)
         # look for JSON status files to reconstruct objects
         manager = Manager()
         dataset_dirs = []
