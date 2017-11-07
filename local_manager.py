@@ -77,6 +77,8 @@ class Job(object):
 
     Attributes
     ----------
+    cluster : int
+        HTcondor job Cluster number
     input_files : [str]
         Name of input files
     job_index : int
@@ -89,6 +91,8 @@ class Job(object):
         Number of events to skip processing
     output_file : str
         Name of output ROOT file
+    process : int
+        HTcondor job Process number
     stderr_filename : str
         File for STDERR
     stdout_filename : str
@@ -98,7 +102,8 @@ class Job(object):
     """
 
     def __init__(self, job_index, input_files=None, output_file=None, nevents_max=-1, nevents_skip=0,
-                 xml_filename="", stdout_filename="", stderr_filename="", log_filename=""):
+                 xml_filename="", stdout_filename="", stderr_filename="", log_filename="",
+                 cluster=0, process=0):
         self.job_index = job_index
         self.input_files = input_files or []
         self.output_file = output_file
@@ -108,8 +113,8 @@ class Job(object):
         self.stdout_filename = stdout_filename
         self.stderr_filename = stderr_filename
         self.log_filename = log_filename
-        # self.cluser = int(cluster)
-        # self.process = int(process)
+        self.cluster = int(cluster)
+        self.process = int(process)
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -164,6 +169,27 @@ class Job(object):
             fout.write("\n")
             fout.write(ET.tostring(template_root, encoding="UTF-8", method="html"))
             fout.write("\n")
+
+    def get_cluster_process(self):
+        """Figure out cluster and process numbers from log file"""
+        with open(self.log_filename) as f:
+            line = f.readline()
+        info = line.split()[1].lstrip("(").rstrip(")").split(".")
+        self.cluster = int(info[0])
+        self.process = int(info[1])
+
+    def update_stdout_stderr_filenames(self, stdout_template, stderr_template):
+        """Update STDOUT/STDERR filenames using cluster & process
+
+        Parameters
+        ----------
+        stdout_template : str
+            STDOUT filename template. Must have $(cluster) and $(process)
+        stderr_template : str
+            STDERR filename template. Must have $(cluster) and $(process)
+        """
+        self.stdout_filename = stdout_template.replace("$(process)", str(self.process)).replace("$(cluster)", str(self.cluster))
+        self.stderr_filename = stderr_template.replace("$(process)", str(self.process)).replace("$(cluster)", str(self.cluster))
 
 
 class File(object):
@@ -366,15 +392,15 @@ queue filename from {LISTFILE}
 
         exe_script = os.path.join(os.path.dirname(__file__), "worker_run.sh")
 
-        self.stdout_stem = "$(rootname).$(cluster).$(process).out"
-        self.stderr_stem = "$(rootname).$(cluster).$(process).err"
-        self.log_stem = "$(rootname).$(cluster).$(process).log"
+        self.stdout_stem = os.path.join(self.job_batchdir_out, "$(rootname).$(cluster).$(process).out")
+        self.stderr_stem = os.path.join(self.job_batchdir_err, "$(rootname).$(cluster).$(process).err")
+        self.log_stem = os.path.join(self.job_batchdir_log, "$(rootname).$(cluster).$(process).log")
 
         job_args = {
             "EXE": exe_script,
-            "OUTFILE": os.path.join(self.job_batchdir_out, self.stdout_stem),
-            "ERRFILE": os.path.join(self.job_batchdir_err, self.stderr_stem),
-            "LOGFILE": os.path.join(self.job_batchdir_log, self.log_stem),
+            "OUTFILE": self.stdout_stem,
+            "ERRFILE": self.stderr_stem,
+            "LOGFILE": self.log_stem,
             "LISTFILE": os.path.join(self.job_batchdir, "xml_list.txt"),
             "JOBNAME": "%s_%s" % (os.path.basename(self.job_outdir), self.name)
         }
@@ -439,17 +465,20 @@ queue filename from {LISTFILE}
         subprocess.check_call(cmd, shell=True)
 
     def find_job_logs(self):
-        """Find the log file for each Job in the Dataset
+        """Find the log file for each Job in the Dataset, and update STDOUT/ERR locations
 
-        If more than 1 match, use the newest.
+        If more than 1 match for log file, use the newest.
+
+        We do it from here, since Dataset controls the pattern for the OUT/ERR/log filenames
+
+        TODO: I guess if we submitted via python API we'd get cluster/proc automatically
         """
         for job in self.jobs:
             num_glob = "[0-9]*"
             pattern = self.log_stem.replace("$(cluster)", num_glob).replace("$(process)", num_glob)
             xml_stem = os.path.splitext(os.path.basename(job.xml_filename))[0]
             pattern = pattern.replace("$(rootname)", xml_stem)
-            filename = os.path.join(self.job_batchdir_log, pattern)
-            matches = glob(filename)
+            matches = glob(pattern)
             if len(matches) == 0:
                 log.warning("Cannot find log file matching %s", filename)
                 job.log_filename = ""
@@ -458,6 +487,15 @@ queue filename from {LISTFILE}
                 job.log_filename = max(matches, key=os.path.getctime)
             else:
                 job.log_filename = matches[0]
+
+            if job.log_filename == "":
+                continue
+
+            # Tell the Job to update itself
+            job.get_cluster_process()
+            new_stdout = self.stdout_stem.replace("$(rootname)", xml_stem)
+            new_stderr = self.stderr_stem.replace("$(rootname)", xml_stem)
+            job.update_stdout_stderr_filenames(new_stdout, new_stderr)
 
 
 class Manager(object):
