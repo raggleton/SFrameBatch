@@ -8,8 +8,10 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 import subprocess
 from glob import glob
+import json
 
 from utils import sanitise_path
+import job_conf_classes
 
 
 fmt = '%(module)s.%(funcName)s:%(lineno)d >> %(message)s'
@@ -93,6 +95,8 @@ class Job(object):
         Name of output ROOT file
     process : int
         HTcondor job Process number
+    status : int
+        Job status
     stderr_filename : str
         File for STDERR
     stdout_filename : str
@@ -103,7 +107,7 @@ class Job(object):
 
     def __init__(self, job_index, input_files=None, output_file=None, nevents_max=-1, nevents_skip=0,
                  xml_filename="", stdout_filename="", stderr_filename="", log_filename="",
-                 cluster=0, process=0):
+                 cluster=0, process=0, status=-1):
         self.job_index = job_index
         self.input_files = input_files or []
         self.output_file = output_file
@@ -115,6 +119,7 @@ class Job(object):
         self.log_filename = log_filename
         self.cluster = int(cluster)
         self.process = int(process)
+        self.status = int(status)
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -280,6 +285,7 @@ class Dataset(object):
         self.job_batchdir_out = None
         self.job_batchdir_err = None
         self.job_batchdir_log = None
+        self.status_json = None
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -300,6 +306,8 @@ class Dataset(object):
         # Setup all the dirs needed for this dataset & its jobs
         self.job_outdir = os.path.join(output_dir, workdir)
         self.job_batchdir = os.path.join(workdir, self.name)
+        self.status_json = os.path.join(self.job_batchdir, "status.json")
+        # Each job puts its out/err/log files in a job-specific dir
         self.job_batchdir_xml = os.path.join(self.job_batchdir, "xml")
         self.job_batchdir_out = os.path.join(self.job_batchdir, "out")
         self.job_batchdir_err = os.path.join(self.job_batchdir, "err")
@@ -497,6 +505,37 @@ queue filename from {LISTFILE}
             new_stderr = self.stderr_stem.replace("$(rootname)", xml_stem)
             job.update_stdout_stderr_filenames(new_stdout, new_stderr)
 
+    def construct_status_dict(self):
+        """Construct dict for this Dataset
+
+        Returns
+        -------
+        dict
+            Description
+        """
+        status_dict = {}
+        # Only keep fields that aren't "deep" or unserializable
+        iterables = [list, tuple, job_conf_classes.InputData]
+        for k, v in self.__dict__.iteritems():
+            if type(v) in iterables:
+                continue
+            status_dict[k] = v
+
+        # Add in Jobs separately
+        job_dicts = []
+        for job in self.jobs:
+            jd = {k:v for k, v in job.__dict__.iteritems() if type(v) not in iterables}
+            job_dicts.append(jd)
+        status_dict["jobs"] = job_dicts
+        return status_dict
+
+    def write_json_status(self):
+        """Save Dataset status as JSON file
+        """
+        status_dict = self.construct_status_dict()
+        with open(self.status_json, "w") as f:
+            json.dump(status_dict, f, indent=2)
+
 
 class Manager(object):
     """Manage all Dataset corresponding to a XML file
@@ -587,9 +626,10 @@ class Manager(object):
             dataset.write_xml_files(template_root)
 
     def submit_jobs(self):
-        """Submit all jobs across all Datasets, and store new log files."""
+        """Submit all jobs across all Datasets, and store log files and status JSON."""
         log.info('Submitting jobs')
         for dataset in self.input_datasets:
             log.info(dataset.name)
             dataset.submit_jobs()
             dataset.find_job_logs()
+            dataset.write_json_status()
