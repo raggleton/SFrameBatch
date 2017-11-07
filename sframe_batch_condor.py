@@ -17,7 +17,7 @@ from pprint import pformat
 
 import job_conf_classes as jcc
 from local_manager import Manager
-from utils import sanitise_path
+from utils import sanitise_path, sort_nicely
 
 
 fmt = '%(module)s.%(funcName)s:%(lineno)d >> %(message)s'
@@ -291,9 +291,10 @@ def main(in_args):
                 for dataset in manager.datasets:
                     log.info('condor_submit %s', dataset.job_file)
     else:
+        log.info("Jobs submitted - processing status")
         # look for JSON status files to reconstruct objects
         manager = Manager()
-        found_a_json = False
+        dataset_dirs = []
         for item in os.listdir(args.workdir):
             full_path = os.path.join(args.workdir, item)
             if not os.path.isdir(full_path):
@@ -301,12 +302,21 @@ def main(in_args):
 
             status_json = os.path.join(full_path, "status.json")
             if os.path.isfile(status_json):
-                found_a_json = True
-                log.info("Getting info for %s", item)
-                manager.load_dataset_from_json(status_json)
+                dataset_dirs.append(full_path)
 
-        if not found_a_json:
-            raise RuntimeError("No status JSONs - i fno jobs running then delete this workdir and try again")
+        sort_nicely(dataset_dirs)
+
+        # Recreate Datasets
+        for dset_dir in dataset_dirs:
+            status_json = os.path.join(dset_dir, "status.json")
+            manager.load_dataset_from_json(status_json)
+
+        # Update info, print status
+        manager.update_dataset_statuses()
+        manager.display_progress()
+
+        if len(dataset_dirs) == 0:
+            raise RuntimeError("No status JSONs - if no jobs running then delete this workdir and try again")
 
     return 0
 

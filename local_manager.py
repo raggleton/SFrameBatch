@@ -9,6 +9,12 @@ import xml.etree.ElementTree as ET
 import subprocess
 from glob import glob
 import json
+from collections import OrderedDict
+import sys
+# naughty hack to get python API working
+sys.path.append('/usr/lib64/python2.6/site-packages')
+import htcondor
+
 
 from utils import sanitise_path
 import job_conf_classes
@@ -545,6 +551,46 @@ queue filename from {LISTFILE}
         with open(self.status_json, "w") as f:
             json.dump(status_dict, f, indent=2)
 
+    def update_status(self, schedd):
+        """Summary
+
+        Parameters
+        ----------
+        schedd : TYPE
+            Description
+        """
+        query_str = 'ClusterId=?=%s' % str(self.jobs[0].cluster)
+        fields = ['ProcId', 'JobStatus']
+        updated_processes = []
+        for job in schedd.xquery(requirements=query_str, projection=fields, limit=10000):
+            process = int(job.get('ProcId'))
+            self.jobs[process].status = int(job.get('JobStatus'))
+            updated_processes.append(process)
+
+        # to get completed jobs we can't poll the schedduler as it doesnt keep them
+        # instead we see if the output file exists
+        # FIXME: check logfile
+        for job in self.jobs:
+            if job.status == 4:
+                continue
+            if job.process not in updated_processes:
+                if os.path.isfile(job.output_file):
+                    job.status = 4
+
+    def get_num_jobs_with_status(self, status):
+        """Get number of jobs with given status
+
+        Parameters
+        ----------
+        status : int
+            HTCondor job status number
+
+        Returns
+        -------
+        int
+        """
+        return sum(1 for job in self.jobs if job.status == status)
+
 
 class Manager(object):
     """Manage all Dataset corresponding to a XML file
@@ -662,3 +708,26 @@ class Manager(object):
         dataset.jobs = [Job(**jdict) for jdict in sdict['jobs']]
         log.debug(dataset)
         self.datasets.append(dataset)
+
+    def update_dataset_statuses(self):
+        """Summary
+        """
+        schedd = htcondor.Schedd()
+        for dataset in self.datasets:
+            dataset.update_status(schedd)
+
+
+    def display_progress(self):
+        """Summary
+        """
+
+        for dataset in self.datasets:
+            n_idle = dataset.get_num_jobs_with_status(1)
+            n_running = dataset.get_num_jobs_with_status(2)
+            n_done = dataset.get_num_jobs_with_status(4)
+            n_held = dataset.get_num_jobs_with_status(5)
+            n_total = len(dataset.jobs)
+            if n_done != n_total:
+                log.info("%s => %d running, %d/%d done", dataset.name, n_running, n_done, n_total)
+            else:
+                log.info("%s => All done :)", dataset.name)
