@@ -32,7 +32,10 @@ class BatchParser(ArgumentParser):
     def __init__(self, *args, **kwargs):
         super(BatchParser, self).__init__(*args, **kwargs)
         self.add_argument("filename",
-                          help="XML config to submit")
+                          help="SFrame XML config")
+        self.add_argument("-s", "--submit", action='store_true',
+                          help="Submit jobs. If workdir does not exist, "
+                          "this will be the default action.")
         self.add_argument("-w", "--workdir", default=None,
                           help="Specify directory to store auxiliary files. "
                                "Overrides whatever is set in <ConfigSGE>")
@@ -152,18 +155,6 @@ def update_args(args, parser_settings, batch_settings):
     args.__dict__.update(batch_settings)
 
 
-def create_batch_workdir(workdir):
-    """Create a workdir for batch/job files"""
-
-    # FIXME: should this be here?
-
-    if os.path.isdir(workdir):
-        log.warning("%s already exists - you probably want to clean it out first", workdir)
-    else:
-        log.debug("Creating workdir %s", workdir)
-        os.makedirs(workdir)
-
-
 def store_tree(tree):
     """Store the XML as python objects
 
@@ -274,21 +265,47 @@ def main(in_args):
     update_args(args, parser_settings, batch_settings)
     log.debug(args)
 
-    tree = ET.fromstring(xml_str)
+    if not os.path.isdir(args.workdir):
+        args.submit = True
+    else:
+        if args.submit:
+            log.warning("%s already exists! No jobs submitted - doing job monitoring instead")
 
-    create_batch_workdir(args.workdir)
+    if args.submit:
+        # Create and submit jobs
+        log.info("Creating workdir %s", args.workdir)
+        os.makedirs(args.workdir)
 
-    job_config = store_tree(tree)
+        tree = ET.fromstring(xml_str)
 
-    template_root = create_template_root(tree)
+        job_config = store_tree(tree)
 
-    for cycle in job_config.cycles:
-        manager = process_cycle(cycle, args, template_root)
-        if not args.dry:
-            manager.submit_jobs()
-        else:
-            for dataset in manager.datasets:
-                log.info('condor_submit %s', dataset.job_file)
+        template_root = create_template_root(tree)
+
+        for cycle in job_config.cycles:
+            manager = process_cycle(cycle, args, template_root)
+            if not args.dry:
+                manager.submit_jobs()
+            else:
+                for dataset in manager.datasets:
+                    log.info('condor_submit %s', dataset.job_file)
+    else:
+        # look for JSON status files to reconstruct objects
+        manager = Manager()
+        found_a_json = False
+        for item in os.listdir(args.workdir):
+            full_path = os.path.join(args.workdir, item)
+            if not os.path.isdir(full_path):
+                continue
+
+            status_json = os.path.join(full_path, "status.json")
+            if os.path.isfile(status_json):
+                found_a_json = True
+                log.info("Getting info for %s", item)
+                manager.load_dataset_from_json(status_json)
+
+        if not found_a_json:
+            raise RuntimeError("No status JSONs - i fno jobs running then delete this workdir and try again")
 
     return 0
 

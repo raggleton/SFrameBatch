@@ -640,3 +640,24 @@ class Manager(object):
             dataset.submit_jobs()
             dataset.find_job_logs()
             dataset.write_json_status()
+
+    def load_dataset_from_json(self, status_json):
+        """Create Dataset and its Jobs from JSON
+
+        TODO: proper Encoder/DEcoders
+
+        Parameters
+        ----------
+        status_json : str
+            JSON status filename
+        """
+        log.debug("Loading JSON from %s", status_json)
+        with open(status_json) as f:
+            sdict = json.load(f)
+
+        dataset = Dataset()
+        dataset.__dict__.update(sdict)
+        # Do jobs manually
+        dataset.jobs = [Job(**jdict) for jdict in sdict['jobs']]
+        log.debug(dataset)
+        self.input_datasets.append(dataset)
