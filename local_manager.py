@@ -724,15 +724,29 @@ class Manager(object):
         longest_dataset_name = max(len(d.name) for d in self.datasets)
         dname_width = longest_dataset_name+1
 
+        total_idle = 0
+        total_running = 0
+        total_held = 0
+        total_done = 0
+        total_sum = 0
+
         for dataset in self.datasets:
             n_idle = dataset.get_num_jobs_with_status(1)
+            total_idle += n_idle
             n_running = dataset.get_num_jobs_with_status(2)
+            total_running += n_running
             n_done = dataset.get_num_jobs_with_status(4)
+            total_done += n_done
             n_held = dataset.get_num_jobs_with_status(5)
+            total_held += n_held
             n_total = len(dataset.jobs)
+            total_sum += n_total
             if n_done != n_total:
                 template = "{name:.<%d}: {running} running, {done}/{total} done" % (dname_width)
                 log.info(template.format(name=dataset.name, running=n_running, done=n_done, total=n_total))
             else:
                 template = "{name:.<%d}: all done :)" % (dname_width)
                 log.info(template.format(name=dataset.name))
+        log.info("-"*80)
+        log.info("TOTAL: %d jobs: %d idle, %d running, %d held, %d done", total_sum, total_idle, total_running, total_held, total_done)
+        log.info("-"*80)
