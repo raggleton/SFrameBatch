@@ -715,6 +715,7 @@ class Manager(object):
         schedd = htcondor.Schedd()
         for dataset in self.datasets:
             dataset.update_status(schedd)
+            dataset.write_json_status()
 
 
     def display_progress(self):
