@@ -224,6 +224,7 @@ def process_cycle(cycle, args, template_root):
         Template JobConfiguration Element to give to jobs to create XML files
     """
     manager = Manager(cycle)
+    manager.setup_datasets()
     manager.setup_jobs(args=args)
     manager.write_batch_files(template_root)
     return manager

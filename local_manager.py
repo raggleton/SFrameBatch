@@ -237,8 +237,6 @@ class Dataset(object):
         Collection of Files that make up this Dataset
     final_file : str
         Final output filename
-    input_data : job_conf_classes.InputData
-        Reference InputData object
     job_batchdir : str
         Top directory for all job-related files
     job_batchdir_err : str
@@ -268,15 +266,10 @@ class Dataset(object):
 
     """
 
-    def __init__(self, input_data):
-        self.input_data = input_data
-        self.name = input_data.Version
-        self.type = input_data.Type
-        tree_name = input_data.input_tree.Name
-        self.files = [File(filename=input_file.FileName,
-                           nevents=get_num_events(input_file.FileName, tree_name),
-                           lumi=0)
-                      for input_file in input_data.input_obj]
+    def __init__(self):
+        self.name = None
+        self.type = None
+        self.files = []
         self.jobs = []
         self.final_file = None
         self.job_outdir = None
@@ -292,6 +285,22 @@ class Dataset(object):
 
     def __str__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
+
+    def setup_from_input_data(self, input_data):
+        """Setup Dataset from InputData object
+
+        Parameters
+        ----------
+        input_data : job_conf_classes.InputData
+            Reference object
+        """
+        self.name = input_data.Version
+        self.type = input_data.Type
+        tree_name = input_data.input_tree.Name
+        self.files = [File(filename=input_file.FileName,
+                           nevents=get_num_events(input_file.FileName, tree_name),
+                           lumi=0)
+                      for input_file in input_data.input_obj]
 
     def setup_jobs_dirs(self, output_dir, workdir):
         """Create dirs for job outputs/condor files, and add in DTDs
@@ -530,8 +539,7 @@ queue filename from {LISTFILE}
         return status_dict
 
     def write_json_status(self):
-        """Save Dataset status as JSON file
-        """
+        """Save Dataset status as JSON file"""
         status_dict = self.construct_status_dict()
         with open(self.status_json, "w") as f:
             json.dump(status_dict, f, indent=2)
@@ -548,11 +556,9 @@ class Manager(object):
         Hold list of all Dataset objects for this XML file
     """
 
-    def __init__(self, job_cycle):
+    def __init__(self, job_cycle=None):
         self.job_cycle = job_cycle
         self.input_datasets = []
-
-        self.setup_datasets()
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, dict_to_str(self.__dict__))
@@ -569,7 +575,8 @@ class Manager(object):
     def setup_datasets(self):
         """Create Datasets from InputData elements in the JobCycle"""
         for input_data in self.job_cycle.input_datas:
-            dataset = Dataset(input_data)
+            dataset = Dataset()
+            dataset.setup_from_input_data(input_data)
             self.input_datasets.append(dataset)
 
     def setup_jobs(self, args):
