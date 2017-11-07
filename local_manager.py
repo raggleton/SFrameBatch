@@ -233,7 +233,7 @@ class Dataset(object):
 
     Attributes
     ----------
-    files : [File]
+    input_files : [File]
         Collection of Files that make up this Dataset
     final_file : str
         Final output filename
@@ -269,7 +269,7 @@ class Dataset(object):
     def __init__(self):
         self.name = None
         self.type = None
-        self.files = []
+        self.input_files = []
         self.jobs = []
         self.final_file = None
         self.job_outdir = None
@@ -297,10 +297,10 @@ class Dataset(object):
         self.name = input_data.Version
         self.type = input_data.Type
         tree_name = input_data.input_tree.Name
-        self.files = [File(filename=input_file.FileName,
-                           nevents=get_num_events(input_file.FileName, tree_name),
-                           lumi=0)
-                      for input_file in input_data.input_obj]
+        self.input_files = [File(filename=input_file.FileName,
+                                 nevents=get_num_events(input_file.FileName, tree_name),
+                                 lumi=0)
+                            for input_file in input_data.input_obj]
 
     def setup_jobs_dirs(self, output_dir, workdir):
         """Create dirs for job outputs/condor files, and add in DTDs
@@ -362,7 +362,7 @@ class Dataset(object):
             raise RuntimeError("%s is not a valid splitting option" % splitting_mechanism)
 
         if splitting_mechanism is "nfiles":
-            for ind, file_group in enumerate(grouper(self.files, splitting_value, fillvalue=None)):
+            for ind, file_group in enumerate(grouper(self.input_files, splitting_value, fillvalue=None)):
                 ind_str = "_%d" % ind
                 out_filename = os.path.join(self.job_outdir, generate_sframe_filename(self.type, self.name + ind_str))
                 xml_filename = os.path.join(self.job_batchdir_xml, self.name + "_%d.xml" % ind)
