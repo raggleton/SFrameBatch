@@ -27,8 +27,18 @@ class pidWatcher(object):
         self.stateList = []
         try:
             #with the change from sge to condor this can nwo be a json dict!
-            proc_qstat = subprocess.Popen(['condor_q','-json','-attributes','JobStatus,GlobalJobId'],stdout=subprocess.PIPE)
-            qstat_xml =  StringIO.StringIO(proc_qstat.communicate()[0])
+            proc_qstat = subprocess.Popen(['condor_q','-json','-attributes','JobStatus,GlobalJobId'],stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out, err = proc_qstat.communicate()
+            # This is a really ugly hack to workaround a htcondor bug
+            # that outputs a message when you don't include ProcId
+            # Fixed in condor version 8.8: https://github.com/htcondor/htcondor/commit/2257b30bbdbb3260b8341403c57c51377455acad#diff-f6a8cce84bc100939e0a50202ffe3602
+            # This hides STDERR unless something other than the
+            # annoying message occurs
+            for line in err.splitlines():
+                if "Two results with the same ID" not in line:
+                    print err
+                    break
+            qstat_xml =  StringIO.StringIO(out)
             if qstat_xml.getvalue():
                 qstat_xml_par = json.loads(qstat_xml.getvalue())            
                 self.parserWorked = True
