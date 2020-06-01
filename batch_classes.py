@@ -19,21 +19,11 @@ def write_script(name,workdir,header,el7_worker=False):
     # For some reason, we have to manually copy across certain environment
     # variables, most notably LD_LIBRARY_PATH, and if running on singularity, PATH
     # Note that we need the existing PATH, otherwise it loses basename, sed, etc
-    # We also need to specify SFRAME_TEMP_DIR ourselves; the default on /tmp
-    # doesn't work when running within singularity (don't know why),
-    # so we need to put it somewhere else.
-    # Note that SFrame will make it's own uniquely named subdirectory
-    # within SFRAME_TEMP_DIR and will clean it up after the job has ended
-    # (set OutputLevel="DEBUG" to see what it does)
-    tmp_dir = os.path.abspath(workdir)
-    if not os.path.isdir(tmp_dir):
-        os.makedirs(tmp_dir)
 
     sframe_wrapper.write(
         """#!/bin/bash
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH_STORED:$LD_LIBRARY_PATH
 export PATH=$PATH_STORED:$PATH
-export SFRAME_TEMP_DIR="""+tmp_dir+"""
 sframe_main $1
         """)
     sframe_wrapper.close()
@@ -65,6 +55,7 @@ sframe_main $1
                 print ""
                 raise RuntimeError("Cannot find image, %s. Do not use one from /afs or /cvmfs." % SINGULARITY_IMG)
             worker_str += '+MySingularityImage="'+SINGULARITY_IMG+'"\n'
+            worker_str += '+MySingularityArgs="--bind /tmp:/tmp"\n'
     else:
         # Choose worker node arch based on SCRAM_ARCH (not login node arch)
         if 'slc7' in os.getenv('SCRAM_ARCH'):
