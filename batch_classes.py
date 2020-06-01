@@ -143,10 +143,11 @@ initialdir        = """+workdir+"""
 output            = $(Stream)/"""+name+""".o$(ClusterId).$(Process)
 error             = $(Stream)/"""+name+""".e$(ClusterId).$(Process)
 log               = $(Stream)/"""+name+""".$(Cluster).log
-#Requesting CPU and DISK Memory - default +RequestRuntime of 3h stays unaltered
+#Requesting CPU and DISK Memory
 # RequestMemory     = """+header.RAM+"""G
 RequestMemory     = 8G
 RequestDisk       = """+header.DISK+"""G
++RequestRuntime = """+str(int(4*3600))+"""
 #You need to set up sframe
 getenv            = True
 environment       = "LD_LIBRARY_PATH_STORED="""+os.environ.get('LD_LIBRARY_PATH')+""" PATH_STORED="""+os.environ.get('PATH')+""""
