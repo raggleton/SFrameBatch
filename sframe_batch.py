@@ -106,6 +106,9 @@ def SFrameBatchMain(input_options):
                       action='store_true',
                       help='Force job to be run on EL7 node. '
                       'If SLC6 environment, will use singularity.')
+    parser.add_option("--local",
+                      action='store_true',
+                      help='Run job interactively in bg via nohup.')
 
 
     (options, args) = parser.parse_args(input_options)

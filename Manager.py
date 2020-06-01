@@ -112,6 +112,7 @@ class JobManager(object):
         self.exitOnQuestion = options.exitOnQuestion
         self.outputstream = self.workdir+'/Stream_'
         self.el7_worker = options.el7worker  # enforce running on EL7 mahcine
+        self.local = options.local  # enforce running interactively
 
     #read xml file and do the magic 
     def process_jobs(self,InputData,Job):
@@ -141,7 +142,7 @@ class JobManager(object):
     def submit_jobs(self,OutputDirectory,nameOfCycle):
         for process in self.subInfo:
             process.startingTime = time.time()
-            process.arrayPid = submit_qsub(process.numberOfFiles,self.outputstream+str(process.name),str(process.name),self.workdir)
+            process.arrayPid = submit_qsub(process.numberOfFiles,self.outputstream+str(process.name),str(process.name),self.workdir,local=self.local)
             print 'Submitted jobs',process.name, 'pid', process.arrayPid
             process.reachedBatch = [False]*process.numberOfFiles
             if process.status != 0:
@@ -166,7 +167,7 @@ class JobManager(object):
                             exit(-1)
                     ask = False
                 if batchstatus != 1:
-                    process.pids[it-1] = resubmit(self.outputstream+process.name,process.name+'_'+str(it),self.workdir,self.header,self.el7_worker)
+                    process.pids[it-1] = resubmit(self.outputstream+process.name,process.name+'_'+str(it),self.workdir,self.header,self.el7_worker,local=self.local)
                     #print 'Resubmitted job',process.name,it, 'pid', process.pids[it-1]
                     self.printString.append('Resubmitted job '+process.name+' '+str(it)+' pid '+str(process.pids[it-1]))
                     if process.status != 0: process.status =0

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import subprocess
 from subprocess import call
 from subprocess import Popen
 from subprocess import PIPE
@@ -158,32 +159,45 @@ queue
 """)
     submitfile.close()
 
-def submit_qsub(NFiles,Stream,name,workdir):
+def submit_qsub(NFiles,Stream,name,workdir,local=False):
     #print '-t 1-'+str(int(NFiles))
     #call(['ls','-l'], shell=True)
+    if local:
+        xmlfilename = os.path.join(workdir, name + ".xml")
+        ofilename = xmlfilename.replace(".xml", ".out")
+        efilename = xmlfilename.replace(".xml", ".err")
+        pop = subprocess.Popen(['nohup', 'sframe_main', xmlfilename], stdout=open(ofilename, "w"), stderr=open(efilename, 'w'))
+        return pop.pid
+    else:
+        if not os.path.exists(Stream):
+            os.makedirs(Stream)
+            print Stream+' has been created'
 
-    if not os.path.exists(Stream):
-        os.makedirs(Stream)
-        print Stream+' has been created'
-
-    #call(['qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'], shell=True)
-    # proc_qstat = Popen(['condor_qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
-    # return (proc_qstat.communicate()[0].split()[2]).split('.')[0]
-    proc_qstat = Popen(['condor_submit'+' '+workdir+'/CondorSubmitfile_'+name+'.submit'+' -a "Stream='+Stream.split('/')[1]+'" -a "queue '+str(NFiles)+'"'],shell=True,stdout=PIPE)
-    return (proc_qstat.communicate()[0].split()[7]).split('.')[0]
+        #call(['qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'], shell=True)
+        # proc_qstat = Popen(['condor_qsub'+' -t 1-'+str(NFiles)+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
+        # return (proc_qstat.communicate()[0].split()[2]).split('.')[0]
+        proc_qstat = Popen(['condor_submit'+' '+workdir+'/CondorSubmitfile_'+name+'.submit'+' -a "Stream='+Stream.split('/')[1]+'" -a "queue '+str(NFiles)+'"'],shell=True,stdout=PIPE)
+        return (proc_qstat.communicate()[0].split()[7]).split('.')[0]
 
 
-def resubmit(Stream,name,workdir,header,el7_worker):
+def resubmit(Stream,name,workdir,header,el7_worker,local=False):
     #print Stream ,name
-    resub_script(name,workdir,header,el7_worker)
-    if not os.path.exists(Stream):
-        os.makedirs(Stream)
-        print Stream+' has been created'
-    #call(['qsub'+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'], shell=True)
-    # proc_qstat = Popen(['condor_qsub'+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
-    # return proc_qstat.communicate()[0].split()[2]
-    proc_qstat = Popen(['condor_submit'+' '+workdir+'/CondorSubmitfile_'+name+'.submit'+' -a "Stream='+Stream.split('/')[1]+'"'],shell=True,stdout=PIPE)
-    return (proc_qstat.communicate()[0].split()[7]).split('.')[0]
+    if local:
+        xmlfilename = os.path.join(workdir, name + ".xml")
+        ofilename = xmlfilename.replace(".xml", ".out")
+        efilename = xmlfilename.replace(".xml", ".err")
+        pop = subprocess.Popen(['nohup', 'sframe_main', xmlfilename], stdout=open(ofilename, "w"), stderr=open(efilename, 'w'))
+        return pop.pid
+    else:
+        resub_script(name,workdir,header,el7_worker)
+        if not os.path.exists(Stream):
+            os.makedirs(Stream)
+            print Stream+' has been created'
+        #call(['qsub'+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'], shell=True)
+        # proc_qstat = Popen(['condor_qsub'+' -o '+Stream+'/'+' -e '+Stream+'/'+' '+workdir+'/split_script_'+name+'.sh'],shell=True,stdout=PIPE)
+        # return proc_qstat.communicate()[0].split()[2]
+        proc_qstat = Popen(['condor_submit'+' '+workdir+'/CondorSubmitfile_'+name+'.submit'+' -a "Stream='+Stream.split('/')[1]+'"'],shell=True,stdout=PIPE)
+        return (proc_qstat.communicate()[0].split()[7]).split('.')[0]
 
 def add_histos(directory,name,NFiles,workdir,outputTree, onlyhists,outputdir):
     if not os.path.exists(outputdir):
