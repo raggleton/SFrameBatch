@@ -198,6 +198,11 @@ class JobManager(object):
                 filename = OutputDirectory+'/'+self.workdir+'/'+nameOfCycle+'.'+process.data_type+'.'+process.name+'_'+str(it)+'.root'
                 #if process.jobsRunning[it]:
                 #print filename, os.path.exists(filename), process.jobsRunning[it], process.jobsDone[it], process.arrayPid, process.pids[it]
+                # delete files that are far too small to be a real ROOT file (typically 63 Bytes, but we choose something tiny)
+                # getsize() returns in bytes
+                if os.path.exists(filename) and os.path.getsize(filename) < 1000:
+                    print filename, "has size", os.path.getsize(filename), "bytes - deleting"
+                    os.remove(filename)
                 if os.path.exists(filename) and process.startingTime < os.path.getctime(filename) and not process.jobsRunning[it]:
                     process.jobsDone[it] = True
                 if not process.jobsDone[it]:
