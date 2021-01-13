@@ -13,6 +13,7 @@ import datetime
 import json
 import time
 import gc
+import shutil
 
 import StringIO
 from xml.dom.minidom import parse, parseString
@@ -113,6 +114,7 @@ class JobManager(object):
         self.outputstream = self.workdir+'/Stream_'
         self.el7_worker = options.el7worker  # enforce running on EL7 mahcine
         self.local = options.local  # enforce running interactively
+        self.use_grid_control = options.gc  # do resubmissions locally via grid-control instead of BIRD
 
     #read xml file and do the magic 
     def process_jobs(self,InputData,Job):
@@ -154,8 +156,33 @@ class JobManager(object):
     def resubmit_jobs(self):
         qstat_out = self.watch.parserWorked
         ask = True
+
+        # first count the number to see if sensible to run each individually
+        num_to_resubmit = 0
         for process in self.subInfo:
-	    for it in process.missingFiles:
+            for it in process.missingFiles:
+                batchstatus = self.watch.check_pidstatus(process.pids[it-1])
+                if batchstatus != 1:
+                    num_to_resubmit += 1
+        # print("numOfResubmit:", self.numOfResubmit, "num_to_resubmit:", num_to_resubmit)
+        max_local_resubmit = 6
+        if self.local and num_to_resubmit > max_local_resubmit and not self.use_grid_control:
+            raise RuntimeError("Do not resubmit %d jobs locally! Maximum of %d allowed, or use --gc" % (num_to_resubmit, max_local_resubmit))
+
+        print "num_to_resubmit", num_to_resubmit
+        frac_resubmit_check = 0.5
+        if num_to_resubmit > (frac_resubmit_check * self.totalFiles):
+            if self.exitOnQuestion:
+                exit(-1)
+            elif not self.keepGoing:
+                res = raw_input('Over %g%% of jobs (%g%%) need resubmitting. Do you really want to resubmit? Y/[N]' % (100*frac_resubmit_check, 100 * num_to_resubmit / self.totalFiles))
+                if res.lower() != 'y':
+                    exit(-1)
+
+        list_of_xml_to_resub = []
+
+        for process in self.subInfo:
+            for it in process.missingFiles:
                 batchstatus = self.watch.check_pidstatus(process.pids[it-1])
                 if qstat_out and batchstatus==-1 and ask:
                     print '\n' + str(qstat_out)
@@ -167,13 +194,69 @@ class JobManager(object):
                             exit(-1)
                     ask = False
                 if batchstatus != 1:
-                    process.pids[it-1] = resubmit(self.outputstream+process.name,process.name+'_'+str(it),self.workdir,self.header,self.el7_worker,local=self.local)
-                    #print 'Resubmitted job',process.name,it, 'pid', process.pids[it-1]
-                    self.printString.append('Resubmitted job '+process.name+' '+str(it)+' pid '+str(process.pids[it-1]))
+                    if not self.use_grid_control:
+                        process.pids[it-1] = resubmit(Stream=self.outputstream+process.name,
+                                                      name=process.name+'_'+str(it),
+                                                      workdir=self.workdir,
+                                                      header=self.header,
+                                                      el7_worker=self.el7_worker,
+                                                      local=self.local)
+                        #print 'Resubmitted job',process.name,it, 'pid', process.pids[it-1]
+                        self.printString.append('Resubmitted job '+process.name+' '+str(it)+' pid '+str(process.pids[it-1]))
+                    else:
+                        list_of_xml_to_resub.append(os.path.abspath(os.path.join(self.workdir, process.name+'_'+str(it)+".xml")))
+                        process.pids[it-1] = "0" # FIXME
+
                     if process.status != 0: process.status =0
                     process.reachedBatch[it-1] = False
-                    
-    #see how many jobs finished, were copied to workdir 
+
+        if self.use_grid_control:
+            print "Running via grid-control"
+            conf_basename = "sframe_leftover_%s.conf" % (str(process.name).replace(" ", "_"))
+            conf_name = os.path.join(self.workdir, conf_basename)
+            workdir = os.path.join(self.workdir, 'work.%s' % os.path.splitext(conf_basename)[0])
+            if os.path.isdir(workdir):
+                print "Deleting old workdir"
+                shutil.rmtree(workdir)
+            print "Writing new conf:", conf_name
+            with open(conf_name, 'w') as f:
+                f.write("[global]\n")
+                f.write('workdir create = True\n')
+                if self.local:
+                    f.write('backend = host\n')  # run locally
+                else:
+                    f.write('backend = local\n')  # Send to local batch system
+
+                f.write('[workflow]\n')
+                f.write('task = UserTask\n')
+
+                f.write('[jobs]\n')
+                f.write('wall time = 3:00\n')  # in hours
+                f.write('max retry = 2\n')
+                f.write('memory = 2000\n')  # in MB
+                if self.local:
+                    f.write('in flight = 6\n')
+
+                f.write('[backend]\n')
+                f.write('wait idle = 60\n')  # in seconds
+
+                f.write("[UserTask]\n")
+                f.write('executable = sframe_gc.sh\n')
+                # need to transfer env vars ourselves
+                f.write("constants = LD_LIBRARY_PATH_STORED PATH_STORED CMSSW_BASE SFRAME_DIR\n")
+                f.write('LD_LIBRARY_PATH_STORED = %s\n' % os.getenv('LD_LIBRARY_PATH'))
+                f.write('PATH_STORED = %s\n' % os.getenv('PATH'))
+                f.write('CMSSW_BASE = %s\n' % os.getenv('CMSSW_BASE'))
+                f.write('SFRAME_DIR = %s\n' % os.getenv('SFRAME_DIR'))
+                # add XML filenames as arguments
+                f.write("parameters = FILENAME\n")
+                arg_str = " ".join(list_of_xml_to_resub)
+                f.write("FILENAME = %s\n" % arg_str)
+
+            print "Please submit with:"
+            print "    grid-control", conf_name
+
+    #see how many jobs finished, were copied to workdir
     def check_jobstatus(self, OutputDirectory, nameOfCycle,remove = False, autoresubmit = True):
         missing = open(self.workdir+'/missing_files.txt','w+')
         waitingFlag_autoresub = False

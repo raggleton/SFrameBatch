@@ -158,7 +158,7 @@ def submit_qsub(NFiles,Stream,name,workdir,local=False):
         ofilename = xmlfilename.replace(".xml", ".out")
         efilename = xmlfilename.replace(".xml", ".err")
         pop = subprocess.Popen(['nohup', 'sframe_main', xmlfilename], stdout=open(ofilename, "w"), stderr=open(efilename, 'w'))
-        return pop.pid
+        return str(pop.pid)
     else:
         if not os.path.exists(Stream):
             os.makedirs(Stream)
@@ -174,11 +174,12 @@ def submit_qsub(NFiles,Stream,name,workdir,local=False):
 def resubmit(Stream,name,workdir,header,el7_worker,local=False):
     #print Stream ,name
     if local:
+        print "Running locally"
         xmlfilename = os.path.join(workdir, name + ".xml")
         ofilename = xmlfilename.replace(".xml", ".out")
         efilename = xmlfilename.replace(".xml", ".err")
         pop = subprocess.Popen(['nohup', 'sframe_main', xmlfilename], stdout=open(ofilename, "w"), stderr=open(efilename, 'w'))
-        return pop.pid
+        return str(pop.pid)
     else:
         resub_script(name,workdir,header,el7_worker)
         if not os.path.exists(Stream):

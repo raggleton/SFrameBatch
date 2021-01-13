@@ -109,6 +109,9 @@ def SFrameBatchMain(input_options):
     parser.add_option("--local",
                       action='store_true',
                       help='Run job interactively in bg via nohup.')
+    parser.add_option("--gc",
+                      action='store_true',
+                      help='Run job locally via grid-control.')
 
 
     (options, args) = parser.parse_args(input_options)
